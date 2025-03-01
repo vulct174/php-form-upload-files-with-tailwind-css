@@ -1,30 +1,34 @@
 <?php
 // Require Google API PHP Client Library
-require_once 'vendor/autoload.php'; // Đảm bảo bạn đã cài đặt Google Client Library thông qua Composer
+require_once 'vendor/autoload.php'; // Ensure you have installed the Google Client Library via Composer
 
-// Hàm chính để xử lý upload file lên Google Drive
-function uploadFileToDrive($filePath, $fileName, $mimeType, $folderName = null) {
-    // Khởi tạo client
+// Main function to handle file upload to Google Drive
+/**
+ * @throws Google_Exception
+ */
+function uploadFileToDrive($filePath, $fileName, $mimeType, $folderName = null): string
+{
+    // Initialize client
     $client = new Google_Client();
     $client->setApplicationName('Drive File Upload App');
-    $client->setScopes(Google_Service_Drive::DRIVE);
+    $client->setScopes((array)Google_Service_Drive::DRIVE);
 
-    // Đường dẫn đến file credentials.json bạn đã tải về từ Google Cloud Console
+    // Path to credentials.json downloaded from Google Cloud Console
     $client->setAuthConfig('credentials.json');
     $client->setAccessType('offline');
     $client->setPrompt('select_account consent');
 
-    // Khởi tạo service
+    // Initialize service
     $service = new Google_Service_Drive($client);
 
-    // Tạo metadata cho file
+    // Create file metadata
     $fileMetadata = new Google_Service_Drive_DriveFile([
         'name' => $fileName
     ]);
 
-    // Nếu cần tải lên vào thư mục cụ thể
+    // If a specific folder is required
     if ($folderName !== null) {
-        // Tìm hoặc tạo thư mục
+        // Find or create folder
         $folderId = getFolderIdByName($service, $folderName);
         if ($folderId === null) {
             $folderId = createFolder($service, $folderName);
@@ -33,10 +37,10 @@ function uploadFileToDrive($filePath, $fileName, $mimeType, $folderName = null) 
         $fileMetadata->setParents([$folderId]);
     }
 
-    // Tạo nội dung file từ đường dẫn
+    // Get file content from path
     $content = file_get_contents($filePath);
 
-    // Cài đặt các tham số upload
+    // Upload parameters
     $file = $service->files->create($fileMetadata, [
         'data' => $content,
         'mimeType' => $mimeType,
@@ -47,7 +51,7 @@ function uploadFileToDrive($filePath, $fileName, $mimeType, $folderName = null) 
     return $file->id;
 }
 
-// Hàm lấy ID của thư mục theo tên
+// Function to get folder ID by name
 function getFolderIdByName($service, $folderName) {
     $query = "mimeType='application/vnd.google-apps.folder' and name='$folderName' and trashed=false";
     $results = $service->files->listFiles([
@@ -63,7 +67,7 @@ function getFolderIdByName($service, $folderName) {
     return $results->getFiles()[0]->getId();
 }
 
-// Hàm tạo thư mục mới
+// Function to create a new folder
 function createFolder($service, $folderName) {
     $fileMetadata = new Google_Service_Drive_DriveFile([
         'name' => $folderName,
@@ -77,56 +81,56 @@ function createFolder($service, $folderName) {
     return $folder->getId();
 }
 
-// Xử lý form upload
+// Handle form upload
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Lấy thông tin từ form
+    // Get form data
     $name = $_POST['name'] ?? '';
     $email = $_POST['email'] ?? '';
     $department = $_POST['department'] ?? '';
     $description = $_POST['description'] ?? '';
 
-    // Xử lý file upload
+    // Handle file upload
     if (isset($_FILES['file-upload']) && $_FILES['file-upload']['error'] === UPLOAD_ERR_OK) {
         $tmpName = $_FILES['file-upload']['tmp_name'];
         $fileName = $_FILES['file-upload']['name'];
         $fileType = $_FILES['file-upload']['type'];
 
         try {
-            // Tạo tên thư mục dựa trên phòng ban
+            // Create folder name based on department
             $folderName = $department ? ucfirst($department) . " Department Files" : "General Uploads";
 
-            // Thêm thông tin người dùng vào tên file nếu cần
+            // Enhance file name with user information
             $enhancedFileName = date('Y-m-d') . " - " . $name . " - " . $fileName;
 
-            // Upload file lên Drive
+            // Upload file to Drive
             $fileId = uploadFileToDrive($tmpName, $enhancedFileName, $fileType, $folderName);
 
-            // Lưu thông tin metadata vào cơ sở dữ liệu nếu cần
+            // Save file metadata to database if needed
             // saveToDatabase($name, $email, $department, $description, $fileName, $fileId);
 
-            // Trả về phản hồi thành công
+            // Return success response
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => true,
-                'message' => 'File đã được tải lên thành công',
+                'message' => 'File has been successfully uploaded',
                 'fileId' => $fileId
             ]);
             exit;
         } catch (Exception $e) {
-            // Xử lý lỗi
+            // Handle error
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => false,
-                'message' => 'Lỗi khi tải file: ' . $e->getMessage()
+                'message' => 'Error uploading file: ' . $e->getMessage()
             ]);
             exit;
         }
     } else {
-        // Không có file hoặc có lỗi
+        // No file selected or an error occurred
         header('Content-Type: application/json');
         echo json_encode([
             'success' => false,
-            'message' => 'Không có file được chọn hoặc có lỗi khi tải lên'
+            'message' => 'No file selected or an error occurred during upload'
         ]);
         exit;
     }

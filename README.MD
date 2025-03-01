@@ -1,6 +1,6 @@
 # PHP Form Upload Files with Tailwind CSS
 
-![Form Screenshot](screenshot.png)
+![Form Screenshot](screenshot-en.png)
 
 ## Overview
 
